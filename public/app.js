@@ -22,6 +22,8 @@ const els = {
   imagesMeta: document.querySelector('#imagesMeta'),
   currentBookName: document.querySelector('#currentBookName'),
   bookInfo: document.querySelector('#bookInfo'),
+  currentImageName: document.querySelector('#currentImageName'),
+  currentPageProgress: document.querySelector('#currentPageProgress'),
   reader: document.querySelector('#reader'),
   statusBar: document.querySelector('#statusBar'),
   toggleSelectionBtn: document.querySelector('#toggleSelectionBtn'),
@@ -48,6 +50,14 @@ const SETTINGS_KEY = 'manga_translator_settings_v4';
 
 function currentImages() { return state.listing?.images || []; }
 function escapeHtml(text) { return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
+
+function updateCurrentPageInfo() {
+  const images = currentImages();
+  const total = images.length;
+  const active = images[state.currentIndex];
+  els.currentImageName.textContent = active?.name || '未打开图片';
+  els.currentPageProgress.textContent = total ? `${state.currentIndex + 1} / ${total}` : '0 / 0';
+}
 
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({
@@ -124,6 +134,7 @@ async function openDirectory(targetPath) {
     els.pathHint.textContent = data.current.path;
     els.currentBookName.textContent = data.current.name;
     els.bookInfo.textContent = `${data.directories.length} 个子文件夹 · ${data.images.length} 张图片`;
+    updateCurrentPageInfo();
     renderFolders();
     renderImages();
     renderReader();
@@ -151,6 +162,7 @@ function jumpToIndex(index) {
   if (!images.length) return;
   state.currentIndex = Math.max(0, Math.min(index, images.length - 1));
   state.activeImagePath = images[state.currentIndex]?.path || '';
+  updateCurrentPageInfo();
   renderImages();
   renderReader();
 }
@@ -173,8 +185,38 @@ function renderImages() {
         renderImages();
         renderReader();
       }
+      updateCurrentPageInfo();
     };
     els.images.appendChild(btn);
+  }
+}
+
+function syncCurrentIndexFromScroll() {
+  if (state.readerMode !== 'scroll') return;
+  const images = currentImages();
+  if (!images.length) return;
+
+  const pages = Array.from(els.reader.querySelectorAll('[data-image-path]'));
+  if (!pages.length) return;
+
+  const readerRect = els.reader.getBoundingClientRect();
+  let bestIndex = state.currentIndex;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const page of pages) {
+    const rect = page.getBoundingClientRect();
+    const distance = Math.abs(rect.top - readerRect.top - 8);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = images.findIndex((item) => item.path === page.dataset.imagePath);
+    }
+  }
+
+  if (bestIndex >= 0 && bestIndex !== state.currentIndex) {
+    state.currentIndex = bestIndex;
+    state.activeImagePath = images[bestIndex]?.path || '';
+    updateCurrentPageInfo();
+    renderImages();
   }
 }
 
@@ -338,6 +380,7 @@ function renderReader() {
     els.reader.appendChild(buildSpread(images, Math.max(0, startIndex)));
   }
   applyZoom();
+  updateCurrentPageInfo();
 }
 
 function renderAnalysis(result, isStreaming = false) {
@@ -596,6 +639,7 @@ els.zoomInBtn.onclick = () => stepZoom(10);
 for (const btn of els.modeBtns) btn.onclick = () => setReaderMode(btn.dataset.mode);
 for (const input of [els.apiKeyInput, els.modelInput, els.baseUrlInput, els.reasoningEffortSelect]) input.addEventListener('change', saveSettings);
 window.addEventListener('resize', applyZoom);
+els.reader.addEventListener('scroll', syncCurrentIndexFromScroll);
 document.addEventListener('keydown', (event) => {
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') return;
   if (event.key === 'ArrowLeft') els.prevPageBtn.click();

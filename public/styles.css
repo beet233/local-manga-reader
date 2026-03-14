@@ -25,7 +25,11 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px;
 .list-item { width: 100%; text-align: left; background: #111726; }
 .list-item.active, .mode-btn.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(110,168,254,.35) inset; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.toolbar-main { min-width: 0; }
 .toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.reader-progress { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+#currentImageName { display: inline-block; max-width: min(52vw, 900px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#currentPageProgress { font-variant-numeric: tabular-nums; }
 .reader-wrap { height: calc(100vh - 230px); overflow: hidden; }
 .reader-controls { display: grid; grid-template-columns: 1.5fr 0.8fr 1.2fr; gap: 14px; align-items: start; }
 .control-group { min-width: 0; }

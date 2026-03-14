@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, 'public');
 const codexConfigPath = 'C:\\Users\\Administrator\\.codex\\config.toml';
+const localAppConfigPath = path.join(__dirname, 'app.config.json');
 const preferredPort = Number(process.env.PORT || 3321);
 const host = process.env.HOST || '127.0.0.1';
 
@@ -191,6 +192,142 @@ function parseSsePayload(rawText) {
   return {};
 }
 
+async function readLocalAppConfig() {
+  const defaults = {
+    persistence: {
+      enabled: true,
+      noteRootDir: 'B:\\nihongo_note\\raw',
+    },
+  };
+
+  try {
+    const raw = await fs.readFile(localAppConfigPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      persistence: {
+        enabled: parsed?.persistence?.enabled ?? defaults.persistence.enabled,
+        noteRootDir: parsed?.persistence?.noteRootDir || defaults.persistence.noteRootDir,
+      },
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function normalizeAnalyzeResultFromText(text) {
+  try {
+    return parseLooseJson(text);
+  } catch (error) {
+    return {
+      transcription: '',
+      translation_zh: '',
+      reading_help: [],
+      grammar_points: [],
+      jokes_or_context: [],
+      confidence: 'low',
+      notes: `模型返回了非标准 JSON，已原样保存在下方。解析错误：${error.message}`,
+      raw_text: String(text || '').trim(),
+    };
+  }
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function getLocalDateParts(date = new Date()) {
+  const year = date.getFullYear();
+  const month = pad2(date.getMonth() + 1);
+  const day = pad2(date.getDate());
+  const hour = pad2(date.getHours());
+  const minute = pad2(date.getMinutes());
+  const second = pad2(date.getSeconds());
+  return {
+    monthKey: `${year}_${month}`,
+    dayKey: `${year}_${month}_${day}`,
+    timestamp: `${year}-${month}-${day} ${hour}:${minute}:${second}`,
+  };
+}
+
+function mdEscape(text) {
+  return String(text ?? '').replace(/\r\n/g, '\n').trim();
+}
+
+function formatReadingHelp(items) {
+  if (!Array.isArray(items) || !items.length) return '- 无\n';
+  return items.map((item) => {
+    const text = mdEscape(item?.text || '');
+    const reading = mdEscape(item?.reading || '');
+    const meaning = mdEscape(item?.meaning_zh || '');
+    return `- **${text || '（空）'}**${reading ? `（${reading}）` : ''}${meaning ? `：${meaning}` : ''}`;
+  }).join('\n') + '\n';
+}
+
+function formatGrammarPoints(items) {
+  if (!Array.isArray(items) || !items.length) return '- 无\n';
+  return items.map((item) => {
+    const pattern = mdEscape(item?.pattern || '');
+    const explanation = mdEscape(item?.explanation_zh || '');
+    const example = mdEscape(item?.example_from_panel || '');
+    return [
+      `- **${pattern || '（未命名语法点）'}**：${explanation || '—'}`,
+      example ? `  - 例句：${example}` : null,
+    ].filter(Boolean).join('\n');
+  }).join('\n') + '\n';
+}
+
+function formatJokesOrContext(items) {
+  if (!Array.isArray(items) || !items.length) return '- 无\n';
+  return items.map((item) => `- ${mdEscape(item) || '（空）'}`).join('\n') + '\n';
+}
+
+function buildNoteMarkdown(result, pageMeta, savedAt) {
+  const lines = [
+    '',
+    '---',
+    `- saved_at: ${savedAt.timestamp}`,
+    `- image_path: ${mdEscape(pageMeta?.imagePath || '')}`,
+    `- page_index: ${pageMeta?.pageIndex ?? ''}`,
+    `- confidence: ${mdEscape(result?.confidence || '')}`,
+    `- rect: \`${JSON.stringify(pageMeta?.rect || {})}\``,
+    '',
+    '## 读音 / 词汇',
+    formatReadingHelp(result?.reading_help),
+    '## 语法讲解',
+    formatGrammarPoints(result?.grammar_points),
+    '## 梗 / 背景',
+    formatJokesOrContext(result?.jokes_or_context),
+  ];
+
+  const notes = mdEscape(result?.notes || '');
+  if (notes) lines.push('', '## 备注', notes);
+
+  const rawText = mdEscape(result?.raw_text || '');
+  if (rawText) lines.push('', '## 模型原始返回', '```', rawText, '```');
+
+  lines.push('');
+  return lines.join('\n');
+}
+
+async function appendAnalysisNote(result, pageMeta, noteRootDir) {
+  const savedAt = getLocalDateParts();
+  const monthDir = path.join(noteRootDir, savedAt.monthKey);
+  const noteFile = path.join(monthDir, `${savedAt.dayKey}.md`);
+  await fs.mkdir(monthDir, { recursive: true });
+  await fs.appendFile(noteFile, buildNoteMarkdown(result, pageMeta, savedAt), 'utf8');
+  return noteFile;
+}
+
+async function persistAnalysisNote(result, pageMeta) {
+  try {
+    const appConfig = await readLocalAppConfig();
+    if (!appConfig.persistence.enabled) return;
+    await appendAnalysisNote(result, pageMeta, normalizeUserPath(appConfig.persistence.noteRootDir));
+  } catch (error) {
+    console.error(`Failed to persist analysis note: ${error.message || error}`);
+  }
+}
+
 async function readCodexConfig() {
   try {
     const raw = await fs.readFile(codexConfigPath, 'utf8');
@@ -276,6 +413,7 @@ async function buildAnalyzeContext(body) {
       Authorization: `Bearer ${apiKey}`,
     },
     requestBody,
+    pageMeta: pageMeta || {},
   };
 }
 
@@ -301,20 +439,9 @@ export async function analyzeSelection(body) {
     throw new Error(`模型没有返回可解析内容。返回字段: ${payloadKeys}`);
   }
 
-  try {
-    return parseLooseJson(text);
-  } catch (error) {
-    return {
-      transcription: '',
-      translation_zh: '',
-      reading_help: [],
-      grammar_points: [],
-      jokes_or_context: [],
-      confidence: 'low',
-      notes: `模型返回了非标准 JSON，已原样保存在下方。解析错误：${error.message}`,
-      raw_text: text.trim(),
-    };
-  }
+  const result = normalizeAnalyzeResultFromText(text);
+  await persistAnalysisNote(result, ctx.pageMeta);
+  return result;
 }
 
 export const server = http.createServer(async (req, res) => {
@@ -370,10 +497,21 @@ export const server = http.createServer(async (req, res) => {
         Connection: 'keep-alive',
       });
 
+      const chunks = [];
       for await (const chunk of upstream.body) {
+        chunks.push(Buffer.from(chunk));
         res.write(chunk);
       }
-      return res.end();
+      res.end();
+
+      const rawSse = Buffer.concat(chunks).toString('utf8');
+      const payload = parseSsePayload(rawSse);
+      const text = extractTextFromResponsesPayload(payload);
+      if (text) {
+        const result = normalizeAnalyzeResultFromText(text);
+        await persistAnalysisNote(result, ctx.pageMeta);
+      }
+      return;
     }
 
     await serveStatic(req, res, url.pathname);

@@ -1,0 +1,6 @@
+{
+  "persistence": {
+    "enabled": true,
+    "noteRootDir": "B:\\nihongo_note\\raw"
+  }
+}
