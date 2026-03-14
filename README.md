@@ -52,6 +52,52 @@ Manga translator app running at http://127.0.0.1:3321
 
 页面上的输入框仍然可以手动覆盖这些值。
 
+## 本地应用配置（app.config.json）
+
+项目支持通过本地配置文件控制一些不适合直接写死进仓库的行为，例如笔记持久化路径。
+
+仓库里提供了示例文件：
+
+`app.config.sample.json`
+
+你可以复制一份为：
+
+`app.config.json`
+
+然后按需修改。这个实际配置文件已经加入 `.gitignore`，不会被提交到 GitHub。
+
+示例：
+
+```json
+{
+  "persistence": {
+    "enabled": true,
+    "noteRootDir": "B:\\nihongo_note\\raw"
+  }
+}
+```
+
+字段说明：
+
+- `persistence.enabled`
+  - 是否开启圈选分析结果的本地持久化
+  - 默认值：`true`
+- `persistence.noteRootDir`
+  - 持久化根目录
+  - 服务端会自动按月份/日期追加写入：
+    - `YYYY_MM/YYYY_MM_DD.md`
+
+例如：
+
+```text
+B:\nihongo_note\raw\2026_03\2026_03_14.md
+```
+
+注意：
+
+- 这是服务端后台静默写入，不会触发浏览器下载。
+- 每次分析完成后只做 append，不会读取旧内容。
+
 ## 环境变量（可选）
 
 如果不想每次在页面里填，可以先设置：
