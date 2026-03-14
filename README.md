@@ -2,6 +2,7 @@
 
 一个无需额外依赖的本地 Web 应用：
 - 浏览本地漫画文件夹（JPG/PNG/WebP 等）
+- 自动恢复最近阅读的漫画与页码
 - 按整卷滚动阅读
 - 单页翻页 / 双页模式
 - 鼠标框选对白区域
@@ -73,6 +74,10 @@ Manga translator app running at http://127.0.0.1:3321
   "persistence": {
     "enabled": true,
     "noteRootDir": "B:\\nihongo_note\\raw"
+  },
+  "readingProgress": {
+    "enabled": true,
+    "filePath": "B:\\nihongo_note\\state\\reading_progress.json"
   }
 }
 ```
@@ -86,6 +91,13 @@ Manga translator app running at http://127.0.0.1:3321
   - 持久化根目录
   - 服务端会自动按月份/日期追加写入：
     - `YYYY_MM/YYYY_MM_DD.md`
+- `readingProgress.enabled`
+  - 是否开启阅读进度本地持久化
+  - 默认值：`true`
+- `readingProgress.filePath`
+  - 阅读进度保存文件
+  - 会按“当前卷目录路径”记录你读到的具体图片
+  - 启动时会优先恢复最近一次阅读的那一卷
 
 例如：
 
@@ -97,6 +109,8 @@ B:\nihongo_note\raw\2026_03\2026_03_14.md
 
 - 这是服务端后台静默写入，不会触发浏览器下载。
 - 每次分析完成后只做 append，不会读取旧内容。
+- 阅读进度会在切页、滚动定位变化后自动保存，下次打开同一卷时自动恢复到上次阅读页。
+- 左侧“最近在看”按钮可以查看最近 5 本阅读记录，并带当前页缩略图快速跳转。
 
 ## 环境变量（可选）
 

@@ -198,6 +198,10 @@ async function readLocalAppConfig() {
       enabled: true,
       noteRootDir: 'B:\\nihongo_note\\raw',
     },
+    readingProgress: {
+      enabled: true,
+      filePath: 'B:\\nihongo_note\\state\\reading_progress.json',
+    },
   };
 
   try {
@@ -208,10 +212,86 @@ async function readLocalAppConfig() {
         enabled: parsed?.persistence?.enabled ?? defaults.persistence.enabled,
         noteRootDir: parsed?.persistence?.noteRootDir || defaults.persistence.noteRootDir,
       },
+      readingProgress: {
+        enabled: parsed?.readingProgress?.enabled ?? defaults.readingProgress.enabled,
+        filePath: parsed?.readingProgress?.filePath || defaults.readingProgress.filePath,
+      },
     };
   } catch {
     return defaults;
   }
+}
+
+async function readJsonFile(filePath, fallback = {}) {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    return raw.trim() ? JSON.parse(raw) : fallback;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return fallback;
+    throw error;
+  }
+}
+
+async function getReadingProgress(targetPath) {
+  const appConfig = await readLocalAppConfig();
+  if (!appConfig.readingProgress.enabled) return null;
+
+  const normalizedTargetPath = normalizeUserPath(targetPath);
+  const progressFilePath = normalizeUserPath(appConfig.readingProgress.filePath);
+  const allProgress = await readJsonFile(progressFilePath, {});
+  return allProgress[normalizedTargetPath] || null;
+}
+
+async function listRecentReadingProgress(limit = 5) {
+  const appConfig = await readLocalAppConfig();
+  if (!appConfig.readingProgress.enabled) return [];
+
+  const progressFilePath = normalizeUserPath(appConfig.readingProgress.filePath);
+  const allProgress = await readJsonFile(progressFilePath, {});
+  const items = Object.entries(allProgress)
+    .map(([folderPath, progress]) => ({
+      folderPath,
+      folderName: path.basename(folderPath),
+      imagePath: progress?.imagePath || '',
+      pageIndex: Number(progress?.pageIndex) || 0,
+      updatedAt: progress?.updatedAt || '',
+    }))
+    .filter((item) => item.folderPath && item.imagePath)
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .slice(0, Math.max(1, Math.min(Number(limit) || 5, 20)));
+
+  return Promise.all(items.map(async (item) => {
+    try {
+      const listing = await listDirectory(item.folderPath);
+      return { ...item, totalPages: listing.images.length };
+    } catch {
+      return { ...item, totalPages: 0 };
+    }
+  }));
+}
+
+async function saveReadingProgress(payload) {
+  const appConfig = await readLocalAppConfig();
+  if (!appConfig.readingProgress.enabled) return { ok: true, disabled: true };
+
+  const folderPath = normalizeUserPath(payload?.folderPath);
+  const imagePath = normalizeUserPath(payload?.imagePath);
+  const pageIndex = Number(payload?.pageIndex);
+  if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('pageIndex 必须是非负整数');
+
+  const progressFilePath = normalizeUserPath(appConfig.readingProgress.filePath);
+  const progressDir = path.dirname(progressFilePath);
+  const allProgress = await readJsonFile(progressFilePath, {});
+
+  allProgress[folderPath] = {
+    imagePath,
+    pageIndex,
+    updatedAt: getLocalDateParts().timestamp,
+  };
+
+  await fs.mkdir(progressDir, { recursive: true });
+  await fs.writeFile(progressFilePath, JSON.stringify(allProgress, null, 2), 'utf8');
+  return { ok: true };
 }
 
 function normalizeAnalyzeResultFromText(text) {
@@ -456,6 +536,14 @@ export const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await readCodexConfig());
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/reading-progress/recent') {
+      return sendJson(res, 200, { items: await listRecentReadingProgress(url.searchParams.get('limit')) });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/reading-progress') {
+      return sendJson(res, 200, { progress: await getReadingProgress(url.searchParams.get('path')) });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/image') {
       const targetPath = normalizeUserPath(url.searchParams.get('path'));
       if (!IMAGE_EXTENSIONS.has(path.extname(targetPath).toLowerCase())) return sendText(res, 400, 'Not an image');
@@ -468,6 +556,10 @@ export const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/analyze') {
       return sendJson(res, 200, await analyzeSelection(await readRequestBody(req)));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/reading-progress') {
+      return sendJson(res, 200, await saveReadingProgress(await readRequestBody(req)));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/analyze-stream') {

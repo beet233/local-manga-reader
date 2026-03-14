@@ -20,6 +20,7 @@
           <div class="row small-gap">
             <button id="goParentBtn">上一级</button>
             <button id="refreshBtn">刷新</button>
+            <button id="recentBooksBtn">最近在看</button>
           </div>
           <p id="pathHint" class="hint"></p>
         </section>
@@ -35,24 +36,26 @@
           <div id="images" class="list"></div>
         </section>
 
-        <section class="panel">
-          <h2>接口设置</h2>
-          <div id="configHint" class="hint">正在读取本机 config.toml ...</div>
-          <label>Model</label>
-          <input id="modelInput" type="text" placeholder="将优先使用 config.toml 里的模型" />
-          <label>推理强度</label>
-          <select id="reasoningEffortSelect">
-            <option value="default">默认</option>
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-          </select>
-          <label>API Key</label>
-          <input id="apiKeyInput" type="password" placeholder="留空则优先使用服务器端环境变量" />
-          <label>Base URL</label>
-          <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />
-          <p class="hint">默认读取你本机的 config.toml。你也可以手动覆盖。</p>
-        </section>
+        <details class="panel collapsible-panel">
+          <summary><h2>接口设置</h2></summary>
+          <div class="collapsible-body">
+            <div id="configHint" class="hint">正在读取本机 config.toml ...</div>
+            <label>Model</label>
+            <input id="modelInput" type="text" placeholder="将优先使用 config.toml 里的模型" />
+            <label>推理强度</label>
+            <select id="reasoningEffortSelect">
+              <option value="default">默认</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+            <label>API Key</label>
+            <input id="apiKeyInput" type="password" placeholder="留空则优先使用服务器端环境变量" />
+            <label>Base URL</label>
+            <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />
+            <p class="hint">默认读取你本机的 config.toml。你也可以手动覆盖。</p>
+          </div>
+        </details>
       </aside>
 
       <main class="content">
@@ -115,6 +118,17 @@
           <div id="analysisResult" class="analysis empty">暂无结果</div>
         </section>
       </aside>
+    </div>
+
+    <div id="recentBooksModal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="recent"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>最近在看</h2>
+          <button id="closeRecentBooksBtn">关闭</button>
+        </div>
+        <div id="recentBooksList" class="recent-books-list"></div>
+      </div>
     </div>
 
     <script type="module" src="/app.js"></script>

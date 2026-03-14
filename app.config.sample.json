@@ -2,5 +2,9 @@
   "persistence": {
     "enabled": true,
     "noteRootDir": "B:\\nihongo_note\\raw"
+  },
+  "readingProgress": {
+    "enabled": true,
+    "filePath": "B:\\nihongo_note\\state\\reading_progress.json"
   }
 }

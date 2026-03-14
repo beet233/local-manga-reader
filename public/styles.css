@@ -18,6 +18,12 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px;
 .app-shell { display: grid; grid-template-columns: 320px 1fr 360px; min-height: 100vh; gap: 12px; padding: 12px; }
 .sidebar, .content, .inspector { min-width: 0; }
 .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.collapsible-panel summary { list-style: none; cursor: pointer; }
+.collapsible-panel summary::-webkit-details-marker { display: none; }
+.collapsible-panel summary h2 { display: inline-block; margin: 0; }
+.collapsible-panel summary::after { content: '展开'; float: right; color: var(--muted); font-size: 12px; }
+.collapsible-panel[open] summary::after { content: '收起'; }
+.collapsible-body { margin-top: 12px; }
 .row { display: flex; gap: 8px; align-items: center; }
 .small-gap { margin-top: 8px; }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -72,5 +78,17 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px;
 .badge { display: inline-block; padding: 2px 8px; background: rgba(139,92,246,.2); border: 1px solid rgba(139,92,246,.35); border-radius: 999px; font-size: 12px; }
 .streaming { color: #9bc1ff; }
 .sticky { position: sticky; top: 12px; }
+.hidden { display: none !important; }
+.modal { position: fixed; inset: 0; z-index: 50; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+.modal-card { position: relative; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; margin: 20px auto; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: 16px; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.modal-header h2 { margin: 0; }
+.recent-books-list { display: flex; flex-direction: column; gap: 10px; }
+.recent-book-item { display: grid; grid-template-columns: 96px 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; background: #111726; border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px; }
+.recent-book-thumb { width: 96px; height: 136px; object-fit: cover; object-position: left center; background: #0b0f18; border-radius: 8px; border: 1px solid #202634; }
+.recent-book-title { font-weight: 600; margin-bottom: 4px; }
+.recent-book-path { font-size: 12px; color: var(--muted); word-break: break-all; }
+.recent-book-meta { font-size: 12px; color: var(--muted); text-align: right; }
 @media (max-width: 1500px) { .reader-controls { grid-template-columns: 1fr; } .reader-wrap { height: calc(100vh - 330px); } }
 @media (max-width: 1400px) { .app-shell { grid-template-columns: 300px 1fr; } .inspector { grid-column: 1 / -1; } }

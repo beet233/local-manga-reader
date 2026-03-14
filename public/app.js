@@ -9,6 +9,9 @@
   analyzing: false,
   zoomPercent: 100,
   streamText: '',
+  progressSaveTimer: null,
+  restoringProgress: false,
+  recentItems: [],
 };
 
 const els = {
@@ -16,6 +19,7 @@ const els = {
   openRootBtn: document.querySelector('#openRootBtn'),
   goParentBtn: document.querySelector('#goParentBtn'),
   refreshBtn: document.querySelector('#refreshBtn'),
+  recentBooksBtn: document.querySelector('#recentBooksBtn'),
   pathHint: document.querySelector('#pathHint'),
   folders: document.querySelector('#folders'),
   images: document.querySelector('#images'),
@@ -44,6 +48,9 @@ const els = {
   zoomOutBtn: document.querySelector('#zoomOutBtn'),
   zoomInBtn: document.querySelector('#zoomInBtn'),
   reasoningEffortSelect: document.querySelector('#reasoningEffortSelect'),
+  recentBooksModal: document.querySelector('#recentBooksModal'),
+  recentBooksList: document.querySelector('#recentBooksList'),
+  closeRecentBooksBtn: document.querySelector('#closeRecentBooksBtn'),
 };
 
 const SETTINGS_KEY = 'manga_translator_settings_v4';
@@ -78,6 +85,78 @@ async function fetchJson(url, options) {
   return data;
 }
 
+
+async function fetchReadingProgress(folderPath) {
+  const data = await fetchJson(`/api/reading-progress?path=${encodeURIComponent(folderPath)}`);
+  return data.progress || null;
+}
+
+async function fetchRecentReadingItems(limit = 5) {
+  const data = await fetchJson(`/api/reading-progress/recent?limit=${limit}`);
+  return data.items || [];
+}
+
+async function persistReadingProgress() {
+  const images = currentImages();
+  const active = images[state.currentIndex];
+  if (!state.currentPath || !active) return;
+
+  try {
+    await fetchJson('/api/reading-progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folderPath: state.currentPath,
+        imagePath: active.path,
+        pageIndex: state.currentIndex,
+      }),
+    });
+  } catch (error) {
+    console.warn('保存阅读进度失败:', error);
+  }
+}
+
+function schedulePersistReadingProgress() {
+  if (state.restoringProgress) return;
+  clearTimeout(state.progressSaveTimer);
+  state.progressSaveTimer = setTimeout(() => {
+    persistReadingProgress();
+  }, 700);
+}
+
+async function restoreReadingProgress() {
+  const images = currentImages();
+  if (!state.currentPath || !images.length) return false;
+
+  try {
+    const progress = await fetchReadingProgress(state.currentPath);
+    if (!progress) return false;
+
+    let targetIndex = images.findIndex((image) => image.path === progress.imagePath);
+    if (targetIndex < 0 && Number.isInteger(progress.pageIndex)) {
+      targetIndex = Math.max(0, Math.min(progress.pageIndex, images.length - 1));
+    }
+    if (targetIndex < 0) return false;
+
+    state.restoringProgress = true;
+    jumpToIndex(targetIndex);
+    if (state.readerMode === 'scroll') {
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-image-path="${CSS.escape(images[targetIndex].path)}"]`)?.scrollIntoView({ block: 'start' });
+      });
+    }
+    setStatus(`已恢复到上次阅读位置：第 ${targetIndex + 1} 页。`);
+    return true;
+  } catch (error) {
+    console.warn('读取阅读进度失败:', error);
+    return false;
+  } finally {
+    setTimeout(() => {
+      state.restoringProgress = false;
+    }, 50);
+  }
+}
+
 async function loadServerConfig() {
   try {
     const config = await fetchJson('/api/config');
@@ -103,6 +182,64 @@ async function loadSettings() {
   state.zoomPercent = saved.zoomPercent || 100;
   syncModeButtons();
   applyZoom();
+}
+
+
+function formatRecentTime(text) {
+  return text || '未知时间';
+}
+
+function closeRecentBooksModal() {
+  els.recentBooksModal.classList.add('hidden');
+}
+
+function renderRecentBooks(items) {
+  els.recentBooksList.innerHTML = '';
+  if (!items.length) {
+    els.recentBooksList.innerHTML = '<div class="hint">还没有阅读记录。</div>';
+    return;
+  }
+
+  for (const item of items) {
+    const button = document.createElement('button');
+    button.className = 'recent-book-item';
+    button.innerHTML = `
+      <img class="recent-book-thumb" src="/api/image?path=${encodeURIComponent(item.imagePath)}" alt="${escapeHtml(item.folderName || 'recent')}" />
+      <div>
+        <div class="recent-book-title">${escapeHtml(item.folderName || item.folderPath || '未命名')}</div>
+        <div class="recent-book-path">${escapeHtml(item.folderPath || '')}</div>
+      </div>
+      <div class="recent-book-meta">
+        <div>${Number(item.pageIndex || 0) + 1} / ${Math.max(Number(item.totalPages || 0), 0)}</div>
+        <div>${escapeHtml(formatRecentTime(item.updatedAt))}</div>
+      </div>
+    `;
+    button.onclick = async () => {
+      closeRecentBooksModal();
+      await openDirectory(item.folderPath);
+    };
+    els.recentBooksList.appendChild(button);
+  }
+}
+
+async function openRecentBooksModal() {
+  els.recentBooksModal.classList.remove('hidden');
+  els.recentBooksList.innerHTML = '<div class="hint">正在读取最近阅读记录...</div>';
+  try {
+    state.recentItems = await fetchRecentReadingItems(5);
+    renderRecentBooks(state.recentItems);
+  } catch (error) {
+    els.recentBooksList.innerHTML = `<div class="hint">读取失败：${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function resolveInitialDirectory() {
+  try {
+    const recentItems = await fetchRecentReadingItems(1);
+    if (recentItems[0]?.folderPath) return recentItems[0].folderPath;
+  } catch {}
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  return saved.lastPath || els.rootPathInput.value || 'B:\\comic';
 }
 
 function setStatus(message) { els.statusBar.textContent = message; }
@@ -138,8 +275,9 @@ async function openDirectory(targetPath) {
     renderFolders();
     renderImages();
     renderReader();
+    const restored = await restoreReadingProgress();
     saveSettings();
-    setStatus(data.images.length ? '已加载当前卷。' : '当前文件夹没有图片，可继续进入子文件夹。');
+    if (!restored) setStatus(data.images.length ? '已加载当前卷。' : '当前文件夹没有图片，可继续进入子文件夹。');
   } catch (error) {
     setStatus(`读取失败：${error.message}`);
   }
@@ -165,6 +303,7 @@ function jumpToIndex(index) {
   updateCurrentPageInfo();
   renderImages();
   renderReader();
+  schedulePersistReadingProgress();
 }
 
 function renderImages() {
@@ -186,6 +325,7 @@ function renderImages() {
         renderReader();
       }
       updateCurrentPageInfo();
+      schedulePersistReadingProgress();
     };
     els.images.appendChild(btn);
   }
@@ -217,6 +357,7 @@ function syncCurrentIndexFromScroll() {
     state.activeImagePath = images[bestIndex]?.path || '';
     updateCurrentPageInfo();
     renderImages();
+    schedulePersistReadingProgress();
   }
 }
 
@@ -619,11 +760,17 @@ function setReaderMode(mode) {
   renderReader();
   renderImages();
   saveSettings();
+  schedulePersistReadingProgress();
 }
 
 els.openRootBtn.onclick = () => openDirectory(els.rootPathInput.value.trim());
 els.goParentBtn.onclick = () => { if (state.listing?.parent) openDirectory(state.listing.parent); };
 els.refreshBtn.onclick = () => openDirectory(state.currentPath || els.rootPathInput.value.trim());
+els.recentBooksBtn.onclick = openRecentBooksModal;
+els.closeRecentBooksBtn.onclick = closeRecentBooksModal;
+els.recentBooksModal.addEventListener('click', (event) => {
+  if (event.target.dataset.closeModal === 'recent') closeRecentBooksModal();
+});
 els.toggleSelectionBtn.onclick = () => {
   state.selectionMode = !state.selectionMode;
   els.toggleSelectionBtn.textContent = `圈选翻译：${state.selectionMode ? '开' : '关'}`;
@@ -650,4 +797,4 @@ document.addEventListener('keydown', (event) => {
 
 await loadSettings();
 els.toggleSelectionBtn.textContent = `圈选翻译：${state.selectionMode ? '开' : '关'}`;
-openDirectory(els.rootPathInput.value.trim());
+openDirectory(await resolveInitialDirectory());
