@@ -1,4 +1,5 @@
 node_modules/
+state/
 .env
 .env.*
 app.config.json
