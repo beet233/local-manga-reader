@@ -1,0 +1,118 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>本地漫画 GPT 辅助阅读器</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <h1>漫画阅读器</h1>
+
+        <section class="panel">
+          <label>根目录 / 当前目录</label>
+          <div class="row">
+            <input id="rootPathInput" type="text" placeholder="例如：B:\comic\某套漫画" />
+            <button id="openRootBtn">打开</button>
+          </div>
+          <div class="row small-gap">
+            <button id="goParentBtn">上一级</button>
+            <button id="refreshBtn">刷新</button>
+          </div>
+          <p id="pathHint" class="hint"></p>
+        </section>
+
+        <section class="panel">
+          <h2>文件夹</h2>
+          <div id="folders" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>本卷页面</h2>
+          <div id="imagesMeta" class="hint"></div>
+          <div id="images" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>接口设置</h2>
+          <div id="configHint" class="hint">正在读取本机 config.toml ...</div>
+          <label>Model</label>
+          <input id="modelInput" type="text" placeholder="将优先使用 config.toml 里的模型" />
+          <label>推理强度</label>
+          <select id="reasoningEffortSelect">
+            <option value="default">默认</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+          <label>API Key</label>
+          <input id="apiKeyInput" type="password" placeholder="留空则优先使用服务器端环境变量" />
+          <label>Base URL</label>
+          <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />
+          <p class="hint">默认读取你本机的 config.toml。你也可以手动覆盖。</p>
+        </section>
+      </aside>
+
+      <main class="content">
+        <section class="toolbar panel">
+          <div>
+            <strong id="currentBookName">未打开漫画</strong>
+            <div id="bookInfo" class="hint"></div>
+          </div>
+          <div class="toolbar-actions">
+            <button id="toggleSelectionBtn">圈选翻译：开</button>
+            <button id="analyzeBtn" disabled>重新分析当前框选</button>
+          </div>
+        </section>
+
+        <section class="reader-wrap panel">
+          <div id="statusBar" class="hint">先在左侧输入一个漫画目录。</div>
+          <div id="reader" class="reader"></div>
+        </section>
+
+        <section class="reader-controls panel">
+          <div class="control-group">
+            <span class="control-label">阅读模式</span>
+            <div class="segmented">
+              <button class="mode-btn active" data-mode="scroll">纵向滚动</button>
+              <button class="mode-btn" data-mode="paged">单页翻页</button>
+              <button class="mode-btn" data-mode="spread">双页模式</button>
+            </div>
+            <div id="readerModeHint" class="hint">当前：纵向滚动</div>
+          </div>
+
+          <div class="control-group nav-group">
+            <span class="control-label">翻页</span>
+            <div class="row">
+              <button id="prevPageBtn">上一页</button>
+              <button id="nextPageBtn">下一页</button>
+            </div>
+          </div>
+
+          <div class="control-group zoom-group">
+            <span class="control-label">缩放</span>
+            <div class="row zoom-row">
+              <button id="zoomOutBtn">-</button>
+              <input id="zoomRange" type="range" min="60" max="220" step="10" value="100" />
+              <button id="zoomInBtn">+</button>
+              <span id="zoomValue" class="zoom-value">100%</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector">
+        <section class="panel sticky">
+          <h2>圈选分析</h2>
+          <div id="selectionInfo" class="hint">圈选翻译默认已开启；松开鼠标后会自动开始流式分析。</div>
+          <div id="streamStatus" class="hint"></div>
+          <div id="analysisResult" class="analysis empty">暂无结果</div>
+        </section>
+      </aside>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
